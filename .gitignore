@@ -1,0 +1,27 @@
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.db
+
+# Virtual Environments
+.venv/
+venv/
+venv*/
+**/venv*/
+backend/venv311/
+
+# Local/Log files
+build_log.txt
+backend/build_log.txt
+*.log
