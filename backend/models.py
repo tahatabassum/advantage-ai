@@ -12,7 +12,7 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     
     # Subscription and Verification fields
-    subscription_tier = Column(String, default="free")
+    subscription_tier = Column(String, default="agency")
     analyses_used_this_month = Column(Integer, default=0)
     subscription_reset_date = Column(DateTime, nullable=True)
     is_verified = Column(Boolean, default=False)

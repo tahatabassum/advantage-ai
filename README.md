@@ -15,10 +15,8 @@ AdVantage AI is a premium, AI-powered digital marketing analyzer and creative di
 - **Copywriting Rewriter & A/B Variants**:
   - Automatically rewrite existing copy for different tones (e.g., direct response, hook-first, educational, curiosity-driven).
   - Generate A/B variant copy recommendations based on high-performing templates.
-- **Stripe Billing & Subscription Portal**: Fully integrated Stripe checkout and billing portal to handle user subscription tiers (`pro`, `agency`).
 - **Brand Profile Customization**: Define brand voice, target audience, and primary competitors to tailor AI feedback to specific brands.
 - **PDF Report Export**: Generate professional, publication-quality PDF audit reports (single reports or side-by-side comparison audits) using ReportLab.
-- **Admin Dashboard**: Comprehensive dashboard to monitor statistics, manage users, and update subscription tiers.
 
 ---
 

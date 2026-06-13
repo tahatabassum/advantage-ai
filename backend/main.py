@@ -51,7 +51,6 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 ADMIN_SECRET = os.getenv("ADMIN_SECRET")
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "https://ais-pre-mafm43q6zvfx4ge5sunea3-741194872062.asia-east1.run.app")
-ADMIN_EMAILS = os.getenv("ADMIN_EMAILS", "").split(",")
 
 # Configure CORS
 origins = ALLOWED_ORIGINS.split(",")
@@ -62,12 +61,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# --- Admin Dependency ---
-def check_admin(current_user: models.User = Depends(get_current_user)):
-    if current_user.email not in ADMIN_EMAILS:
-        raise HTTPException(status_code=403, detail="Admin access required")
-    return current_user
 
 # --- Authentication Endpoints ---
 
@@ -192,24 +185,6 @@ async def health_check():
         "ai_available": bool(api_key)
     }
 
-@app.get("/api/v1/advantage/subscription/status", response_model=SubscriptionStatus)
-async def get_subscription_status(current_user: models.User = Depends(get_current_user), db: Session = Depends(database.get_db)):
-    # Check for usage reset before returning status
-    check_usage_limit(current_user, db)
-    
-    limits = get_tier_limits(current_user.subscription_tier)
-    analyses_per_month = limits["analyses_per_month"]
-    
-    remaining = -1
-    if analyses_per_month != -1:
-        remaining = max(0, analyses_per_month - current_user.analyses_used_this_month)
-    
-    return {
-        "current_tier": current_user.subscription_tier,
-        "analyses_used": current_user.analyses_used_this_month,
-        "analyses_remaining": remaining,
-        "reset_date": current_user.subscription_reset_date
-    }
 
 @app.post("/api/v1/advantage/analyze", response_model=FullAnalysisResponse)
 @limiter.limit("10/minute")
@@ -535,87 +510,7 @@ async def export_comparison_pdf(analyses: List[Dict]):
         print(f"Comparison PDF error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# --- Admin Endpoints ---
 
-@app.get("/api/v1/advantage/admin/stats")
-async def get_admin_stats(current_user: models.User = Depends(check_admin), db: Session = Depends(database.get_db)):
-    total_users = db.query(func.count(models.User.id)).scalar()
-    total_analyses = db.query(func.count(models.AnalysisHistory.id)).scalar()
-    
-    users_by_tier = db.query(models.User.subscription_tier, func.count(models.User.id))\
-        .group_by(models.User.subscription_tier).all()
-    
-    last_7_days = datetime.utcnow() - timedelta(days=7)
-    analyses_7d = db.query(func.count(models.AnalysisHistory.id))\
-        .filter(models.AnalysisHistory.created_at >= last_7_days).scalar()
-        
-    last_30_days = datetime.utcnow() - timedelta(days=30)
-    analyses_30d = db.query(func.count(models.AnalysisHistory.id))\
-        .filter(models.AnalysisHistory.created_at >= last_30_days).scalar()
-        
-    top_platforms = db.query(models.AnalysisHistory.platform, func.count(models.AnalysisHistory.id))\
-        .group_by(models.AnalysisHistory.platform)\
-        .order_by(func.count(models.AnalysisHistory.id).desc())\
-        .limit(5).all()
-
-    return {
-        "total_users": total_users,
-        "total_analyses": total_analyses,
-        "users_by_tier": dict(users_by_tier),
-        "analyses_last_7_days": analyses_7d,
-        "analyses_last_30_days": analyses_30d,
-        "top_platforms": dict(top_platforms)
-    }
-
-@app.get("/api/v1/advantage/admin/users")
-async def get_admin_users(
-    page: int = 1, 
-    limit: int = 20, 
-    search: Optional[str] = None,
-    current_user: models.User = Depends(check_admin), 
-    db: Session = Depends(database.get_db)
-):
-    query = db.query(models.User)
-    if search:
-        query = query.filter(models.User.email.ilike(f"%{search}%"))
-    
-    total = query.count()
-    users = query.offset((page - 1) * limit).limit(limit).all()
-    
-    return {
-        "total": total,
-        "page": page,
-        "limit": limit,
-        "users": [
-            {
-                "id": u.id,
-                "email": u.email,
-                "tier": u.subscription_tier,
-                "created_at": u.created_at,
-                "is_verified": u.is_verified,
-                "analyses_count": db.query(func.count(models.AnalysisHistory.id)).filter(models.AnalysisHistory.user_id == u.id).scalar()
-            } for u in users
-        ]
-    }
-
-@app.post("/api/v1/advantage/admin/users/{user_id}/change-tier")
-async def admin_change_tier(
-    user_id: int, 
-    tier_data: Dict, 
-    current_user: models.User = Depends(check_admin), 
-    db: Session = Depends(database.get_db)
-):
-    new_tier = tier_data.get("tier")
-    if new_tier not in ["free", "pro", "agency"]:
-        raise HTTPException(status_code=400, detail="Invalid tier")
-        
-    user = db.query(models.User).filter(models.User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-        
-    user.subscription_tier = new_tier
-    db.commit()
-    return {"status": "ok", "message": f"User tier changed to {new_tier}"}
 
 @app.post("/api/v1/advantage/debug/reset-users")
 async def reset_users(

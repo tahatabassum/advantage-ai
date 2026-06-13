@@ -20,8 +20,6 @@ import { AuthPage } from './components/auth/AuthPage';
 
 import HeroVisual from './components/HeroVisual';
 
-import UsageBanner from './UsageBanner';
-import PricingPage from './PricingPage';
 
 const loadingSteps = [
     "Scanning visual elements...",
@@ -35,7 +33,7 @@ const App: React.FC = () => {
     const [isAuthenticated, setIsAuthenticated] = useState<boolean>(!!localStorage.getItem('access_token'));
     const [user, setUser] = useState<any>(null);
     const [isCheckingAuth, setIsCheckingAuth] = useState<boolean>(true);
-    const [view, setView] = useState<'home' | 'video' | 'dashboard' | 'comparison' | 'brand' | 'pricing'>('home');
+    const [view, setView] = useState<'home' | 'video' | 'dashboard' | 'comparison' | 'brand'>('home');
     const [analysis, setAnalysis] = useState<FullAnalysisResponse | null>(null);
     const [lastCaption, setLastCaption] = useState<string>('');
     const [comparisonAds, setComparisonAds] = useState<FullAnalysisResponse[]>([]);
@@ -142,8 +140,7 @@ const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
                 return;
             }
             if (err.response?.status === 429) {
-                setError("Analysis limit reached. Please upgrade your plan to continue auditing.");
-                setView('pricing');
+                setError("Usage limit reached. Please wait a moment and try again.");
                 return;
             }
             setError(`Analysis failed: ${detail}. Please try again.`);
@@ -259,10 +256,6 @@ const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
             className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${view === 'dashboard' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
             History
         </button>
-        <button onClick={() => { setView('pricing'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-            className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${view === 'pricing' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
-            Pricing
-        </button>
         {comparisonAds.length >= 2 && (
             <button onClick={() => { setView('comparison'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
                 className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${view === 'comparison' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
@@ -315,7 +308,6 @@ const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
                     { label: 'Video', viewKey: 'video' },
                     { label: 'Brand', viewKey: 'brand' },
                     { label: 'History', viewKey: 'dashboard' },
-                    { label: 'Pricing', viewKey: 'pricing' },
                     ...(comparisonAds.length >= 2 ? [{ label: `Compare (${comparisonAds.length})`, viewKey: 'comparison' }] : []),
                 ].map(({ label, viewKey }) => (
                     <button
@@ -348,9 +340,6 @@ const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 </header>
 
             <main className="flex-1 w-full max-w-7xl mx-auto p-4 md:p-8 space-y-12">
-                {isAuthenticated && view !== 'pricing' && (
-                    <UsageBanner onUpgradeClick={() => setView('pricing')} />
-                )}
                 {view === 'home' ? (
                     <>
                         {/* Hero Section */}
@@ -586,10 +575,6 @@ const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
                              <p className="text-slate-500 font-semibold">Define your unique market position and creative boundaries.</p>
                         </div>
                         <BrandCenter />
-                    </section>
-                ) : view === 'pricing' ? (
-                    <section className="py-12">
-                        <PricingPage currentTier={user?.subscription_tier} />
                     </section>
                 ) : (
                     <section className="py-12">

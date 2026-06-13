@@ -143,10 +143,6 @@ export const resendVerification = async () => {
     return response.data;
 };
 
-export const getSubscriptionStatus = async () => {
-    const response = await api.get('/subscription/status');
-    return response.data;
-};
 
 export const rewriteAdText = async (
     original_text: string, 
