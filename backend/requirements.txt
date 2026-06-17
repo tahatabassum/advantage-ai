@@ -19,3 +19,4 @@ SpeechRecognition==3.10.4
 undetected-chromedriver==3.5.5
 beautifulsoup4==4.12.3
 psycopg2-binary>=2.9.9
+aiohttp>=3.9.5
