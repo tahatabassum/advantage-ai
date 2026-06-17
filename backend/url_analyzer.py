@@ -146,16 +146,26 @@ def get_selenium_driver():
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
+    options.add_argument("--disable-software-rasterizer")
+    options.add_argument("--disable-extensions")
     options.add_argument("--window-size=1280,900")
     options.add_argument("--disable-blink-features=AutomationControlled")
     options.add_argument(
         "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
         "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     )
+    # Memory optimization flags for 512MB RAM free instances
+    options.add_argument("--js-flags=--max-old-space-size=256")
+    options.add_argument("--disable-browser-side-navigation")
+    options.add_argument("--disable-infobars")
+    options.add_argument("--disable-notifications")
+    options.add_argument("--disable-default-apps")
 
     major_version = get_chrome_major_version()
     print(f"[URLAnalyzer] Detected Chrome major version: {major_version}")
 
+    driver = None
+    # Try undetected-chromedriver first
     try:
         if major_version:
             driver = uc.Chrome(options=options, version_main=major_version, headless=True)
@@ -166,8 +176,42 @@ def get_selenium_driver():
         try:
             driver = uc.Chrome(options=options, headless=True)
         except Exception as e2:
-            print(f"[URLAnalyzer] Failed fallback 1: {e2}")
-            driver = uc.Chrome(options=options)
+            print(f"[URLAnalyzer] Failed fallback 1 (uc.Chrome): {e2}")
+
+    # Fallback to standard selenium webdriver if undetected-chromedriver fails
+    if not driver:
+        try:
+            print("[URLAnalyzer] Falling back to standard Selenium Webdriver...")
+            from selenium import webdriver
+            from selenium.webdriver.chrome.service import Service
+            from webdriver_manager.chrome import ChromeDriverManager
+            from selenium.webdriver.chrome.options import Options
+            
+            std_options = Options()
+            std_options.add_argument("--headless")
+            std_options.add_argument("--no-sandbox")
+            std_options.add_argument("--disable-dev-shm-usage")
+            std_options.add_argument("--disable-gpu")
+            std_options.add_argument("--disable-software-rasterizer")
+            std_options.add_argument("--disable-extensions")
+            std_options.add_argument("--window-size=1280,900")
+            std_options.add_argument("--disable-blink-features=AutomationControlled")
+            std_options.add_argument(
+                "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            )
+            std_options.add_argument("--js-flags=--max-old-space-size=256")
+            std_options.add_argument("--disable-browser-side-navigation")
+            
+            # Install Chrome driver using WebdriverManager
+            driver_path = ChromeDriverManager().install()
+            print(f"[URLAnalyzer] Standard WebdriverManager installed driver to: {driver_path}")
+            service = Service(driver_path)
+            driver = webdriver.Chrome(service=service, options=std_options)
+            print("[URLAnalyzer] Standard Selenium Webdriver started successfully")
+        except Exception as e3:
+            print(f"[URLAnalyzer] Standard Selenium fallback failed: {e3}")
+            raise Exception(f"Failed to start any Chrome Webdriver: {e} | {e2} | {e3}")
 
     driver.set_page_load_timeout(60)
     return driver
