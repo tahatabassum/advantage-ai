@@ -128,19 +128,7 @@ def get_chrome_major_version():
     except:
         return None
 
-def get_selenium_driver():
-    # Clean up stale chromedriver lock file that causes WinError 183
-    import shutil
-    uc_dir = os.path.join(os.path.expanduser("~"), "appdata", "roaming", 
-                          "undetected_chromedriver", "undetected")
-    stale = os.path.join(uc_dir, "undetected_chromedriver.exe")
-    if os.path.exists(stale):
-        try:
-            os.remove(stale)
-            print("[URLAnalyzer] Removed stale chromedriver lock file")
-        except Exception as e:
-            print(f"[URLAnalyzer] Could not remove stale file: {e}")
-
+def get_selenium_options():
     options = uc.ChromeOptions()
     options.add_argument("--headless")
     options.add_argument("--no-sandbox")
@@ -160,25 +148,48 @@ def get_selenium_driver():
     options.add_argument("--disable-infobars")
     options.add_argument("--disable-notifications")
     options.add_argument("--disable-default-apps")
+    return options
+
+def get_selenium_driver():
+    # Clean up stale chromedriver lock file that causes WinError 183
+    import shutil
+    uc_dir = os.path.join(os.path.expanduser("~"), "appdata", "roaming", 
+                          "undetected_chromedriver", "undetected")
+    stale = os.path.join(uc_dir, "undetected_chromedriver.exe")
+    if os.path.exists(stale):
+        try:
+            os.remove(stale)
+            print("[URLAnalyzer] Removed stale chromedriver lock file")
+        except Exception as e:
+            print(f"[URLAnalyzer] Could not remove stale file: {e}")
 
     major_version = get_chrome_major_version()
     print(f"[URLAnalyzer] Detected Chrome major version: {major_version}")
 
     driver = None
-    # Try undetected-chromedriver first
-    try:
-        if major_version:
-            driver = uc.Chrome(options=options, version_main=major_version, headless=True)
-        else:
-            driver = uc.Chrome(options=options, headless=True)
-    except Exception as e:
-        print(f"[URLAnalyzer] Failed to start uc.Chrome: {e}")
+    err1, err2, err3 = "", "", ""
+
+    # Try 1: uc.Chrome with version_main (if version detected)
+    if major_version:
         try:
+            print(f"[URLAnalyzer] Attempting uc.Chrome with version {major_version}...")
+            options = get_selenium_options()
+            driver = uc.Chrome(options=options, version_main=major_version, headless=True)
+        except Exception as e:
+            err1 = str(e)
+            print(f"[URLAnalyzer] Failed uc.Chrome with version {major_version}: {err1}")
+
+    # Try 2: uc.Chrome without version_main (auto-detect)
+    if not driver:
+        try:
+            print("[URLAnalyzer] Attempting uc.Chrome (auto-detect version)...")
+            options = get_selenium_options()
             driver = uc.Chrome(options=options, headless=True)
         except Exception as e2:
-            print(f"[URLAnalyzer] Failed fallback 1 (uc.Chrome): {e2}")
+            err2 = str(e2)
+            print(f"[URLAnalyzer] Failed uc.Chrome auto-detect: {err2}")
 
-    # Fallback to standard selenium webdriver if undetected-chromedriver fails
+    # Try 3: Standard Selenium Webdriver using webdriver-manager
     if not driver:
         try:
             print("[URLAnalyzer] Falling back to standard Selenium Webdriver...")
@@ -210,8 +221,9 @@ def get_selenium_driver():
             driver = webdriver.Chrome(service=service, options=std_options)
             print("[URLAnalyzer] Standard Selenium Webdriver started successfully")
         except Exception as e3:
-            print(f"[URLAnalyzer] Standard Selenium fallback failed: {e3}")
-            raise Exception(f"Failed to start any Chrome Webdriver: {e} | {e2} | {e3}")
+            err3 = str(e3)
+            print(f"[URLAnalyzer] Standard Selenium fallback failed: {err3}")
+            raise Exception(f"Failed to start any Chrome Webdriver: {err1} | {err2} | {err3}")
 
     driver.set_page_load_timeout(60)
     return driver
