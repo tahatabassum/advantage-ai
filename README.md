@@ -11,8 +11,6 @@
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
 
 *   **Live Demo (Frontend)**: [https://advantage-ai-1.onrender.com](https://advantage-ai-1.onrender.com)
-*   **Live API Backend**: [https://advantage-ai-naa2.onrender.com/api/v1/advantage/health](https://advantage-ai-naa2.onrender.com/api/v1/advantage/health)
-*   **GitHub Repository**: [https://github.com/tahatabassum/advantage-ai](https://github.com/tahatabassum/advantage-ai)
 
 ---
 
