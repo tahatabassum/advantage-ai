@@ -16,3 +16,6 @@ numpy==1.26.4
 opencv-python-headless==4.9.0.80
 moviepy==1.0.3
 SpeechRecognition==3.10.4
+undetected-chromedriver==3.5.5
+beautifulsoup4==4.12.3
+psycopg2-binary>=2.9.9

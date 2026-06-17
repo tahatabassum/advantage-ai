@@ -124,9 +124,9 @@ def get_chrome_major_version():
                 return int(version.split(".")[0])
             except:
                 continue
-        return 147 # Default fallback
+        return None # Default fallback
     except:
-        return 147
+        return None
 
 def get_selenium_driver():
     # Clean up stale chromedriver lock file that causes WinError 183
@@ -157,12 +157,16 @@ def get_selenium_driver():
     print(f"[URLAnalyzer] Detected Chrome major version: {major_version}")
 
     try:
-        driver = uc.Chrome(options=options, version_main=major_version, headless=True)
+        if major_version:
+            driver = uc.Chrome(options=options, version_main=major_version, headless=True)
+        else:
+            driver = uc.Chrome(options=options, headless=True)
     except Exception as e:
-        print(f"[URLAnalyzer] Failed to start uc.Chrome with version {major_version}: {e}")
+        print(f"[URLAnalyzer] Failed to start uc.Chrome: {e}")
         try:
             driver = uc.Chrome(options=options, headless=True)
-        except:
+        except Exception as e2:
+            print(f"[URLAnalyzer] Failed fallback 1: {e2}")
             driver = uc.Chrome(options=options)
 
     driver.set_page_load_timeout(60)
