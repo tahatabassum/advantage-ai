@@ -7,6 +7,8 @@ interface CopyVariantsProps {
 }
 
 const CopyVariants: React.FC<CopyVariantsProps> = ({ variants }) => {
+  if (!variants) return null;
+
   return (
     <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm">
       <div className="p-8 border-b border-slate-100 bg-slate-50/50">
@@ -22,13 +24,13 @@ const CopyVariants: React.FC<CopyVariantsProps> = ({ variants }) => {
           <div className="space-y-4">
             <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400">Direct Response Angle</h3>
             <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100 text-sm font-medium leading-relaxed italic border-l-4 border-l-blue-500">
-              {variants.direct_response}
+              {variants?.direct_response ?? ''}
             </div>
           </div>
           <div className="space-y-4">
             <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400">Storytelling Angle</h3>
             <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100 text-sm font-medium leading-relaxed italic border-l-4 border-l-purple-500">
-              {variants.storytelling}
+              {variants?.storytelling ?? ''}
             </div>
           </div>
         </div>
@@ -37,7 +39,7 @@ const CopyVariants: React.FC<CopyVariantsProps> = ({ variants }) => {
           <div>
             <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4">Headline Variants</h3>
             <div className="flex flex-col gap-2">
-              {variants.headline_variants.map((h, i) => (
+              {(variants?.headline_variants ?? []).map((h, i) => (
                 <div key={i} className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-100 hover:bg-slate-100 transition-colors group">
                   <span className="text-sm font-black">{h}</span>
                   <button className="p-2 opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-slate-900">
@@ -51,7 +53,7 @@ const CopyVariants: React.FC<CopyVariantsProps> = ({ variants }) => {
           <div>
             <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4">Optimized Hashtags</h3>
             <div className="flex flex-wrap gap-2">
-              {variants.hashtags.map((h, i) => (
+              {(variants?.hashtags ?? []).map((h, i) => (
                 <div key={i} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold">
                   <Hash className="w-3 h-3" />
                   {h.startsWith('#') ? h.slice(1) : h}

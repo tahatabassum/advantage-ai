@@ -114,9 +114,23 @@ export interface FeedbackChecklist {
   low_priority: string[];
 }
 
+export interface VideoAnalysis {
+  duration_seconds: number;
+  total_frames_analyzed: number;
+  has_audio: boolean;
+  audio_transcript: string;
+  scene_count: number;
+  pacing: string;
+  hook_strength: string;
+  first_3_seconds_verdict: string;
+  visual_storytelling_score: number;
+  audio_visual_alignment: string;
+}
+
 export interface FullAnalysisResponse {
   advantage_ai_analysis: AdvantageAIAnalysis;
   visual_analysis: VisualAnalysis;
+  video_analysis?: VideoAnalysis;
   copy_analysis: CopyAnalysis;
   hook_analysis: HookAnalysis;
   psychology_triggers: PsychologyTriggers;

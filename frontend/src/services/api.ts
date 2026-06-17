@@ -13,6 +13,19 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      // Only clear token — do NOT redirect here.
+      // Component-level catch blocks (App.tsx handleLogout) manage auth state.
+      // Redirecting here causes infinite loops in SPA.
+      localStorage.removeItem('access_token');
+    }
+    return Promise.reject(error);
+  }
+);
+
 export const resetUsers = async (adminSecret: string) => {
     const response = await api.post(`/debug/reset-users?secret=${adminSecret}`);
     return response.data;
@@ -71,9 +84,7 @@ export const analyzeBulk = async (
   formData.append('captions', JSON.stringify(captions));
   formData.append('platform', platform);
   formData.append('objective', objective);
-  const response = await api.post<FullAnalysisResponse[]>('/analyze-bulk', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
+  const response = await api.post<FullAnalysisResponse[]>('/analyze-bulk', formData);
   return response.data;
 };
 
@@ -90,8 +101,22 @@ export const analyzeVideoAd = async (
   formData.append("objective", objective);
 
   const response = await api.post("/analyze-video", formData, {
-    headers: { "Content-Type": "multipart/form-data" },
     timeout: 120000,
+  });
+  return response.data;
+};
+
+export const analyzeByUrl = async (
+  url: string,
+  analysisType: string,
+  platform: string,
+  objective: string
+): Promise<FullAnalysisResponse> => {
+  const response = await api.post<FullAnalysisResponse>('/analyze-url', {
+    url,
+    analysis_type: analysisType,
+    platform,
+    objective
   });
   return response.data;
 };
@@ -143,6 +168,10 @@ export const resendVerification = async () => {
     return response.data;
 };
 
+export const getSubscriptionStatus = async () => {
+    const response = await api.get('/subscription/status');
+    return response.data;
+};
 
 export const rewriteAdText = async (
     original_text: string, 

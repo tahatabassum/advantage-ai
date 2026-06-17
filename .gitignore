@@ -14,14 +14,25 @@ __pycache__/
 *.pyd
 *.db
 
-# Virtual Environments
-.venv/
+# Debug and Test Scripts
+debug_meta.py
+debug_meta_id.py
+debug_screenshot.png
+debug_text_meta.py
+detect_server.py
+force_reset_users.py
+metadata-1.json
+metadata.json
+reset_db_task.py
+test_chrome_simple.py
+test_meta.py
+test_meta2.py
+test_meta_selenium.png
+test_openrouter.py
+test_screenshot.png
+test_screenshot2.png
+test_selenium.py
+check_env.ts
+debug_screenshot_selenium.py
+backend/venv/
 venv/
-venv*/
-**/venv*/
-backend/venv311/
-
-# Local/Log files
-build_log.txt
-backend/build_log.txt
-*.log

@@ -7,10 +7,12 @@ interface ABVariantsProps {
 }
 
 const ABVariants: React.FC<ABVariantsProps> = ({ variants }) => {
+  if (!variants) return null;
+  
   const variantList = [
-    { id: 'A', data: variants.variant_a, color: 'blue' },
-    { id: 'B', data: variants.variant_b, color: 'emerald' },
-    { id: 'C', data: variants.variant_c, color: 'purple' },
+    { id: 'A', data: variants?.variant_a, color: 'blue' },
+    { id: 'B', data: variants?.variant_b, color: 'emerald' },
+    { id: 'C', data: variants?.variant_c, color: 'purple' },
   ];
 
   return (
@@ -35,7 +37,7 @@ const ABVariants: React.FC<ABVariantsProps> = ({ variants }) => {
                 {v.id}
               </div>
               <div>
-                <h3 className="text-lg font-black tracking-tight">{v.data.angle} Angle</h3>
+                <h3 className="text-lg font-black tracking-tight">{v.data?.angle ?? ''} Angle</h3>
                 <p className="text-xs font-black uppercase tracking-widest text-slate-400">Psychology-Driven Direction</p>
               </div>
             </div>
@@ -44,14 +46,14 @@ const ABVariants: React.FC<ABVariantsProps> = ({ variants }) => {
               <div className="space-y-4">
                 <div className="space-y-1">
                   <span className="text-[10px] font-black uppercase text-slate-400">Headline</span>
-                  <p className="text-md font-black italic">"{v.data.headline}"</p>
+                  <p className="text-md font-black italic">"{v.data?.headline ?? ''}"</p>
                 </div>
                 <div className="space-y-1">
                   <span className="text-[10px] font-black uppercase text-slate-400">Body</span>
-                  <p className="text-sm font-medium text-slate-600 leading-relaxed">{v.data.body}</p>
+                  <p className="text-sm font-medium text-slate-600 leading-relaxed">{v.data?.body ?? ''}</p>
                 </div>
                 <div className="inline-flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg text-xs font-black uppercase tracking-widest">
-                  {v.data.cta} <ArrowRight className="w-3 h-3" />
+                  {v.data?.cta ?? ''} <ArrowRight className="w-3 h-3" />
                 </div>
               </div>
 
@@ -62,7 +64,7 @@ const ABVariants: React.FC<ABVariantsProps> = ({ variants }) => {
                     <span className="text-[10px] font-black uppercase tracking-widest">Strategy Logic</span>
                   </div>
                   <p className="text-sm font-medium text-slate-500 leading-relaxed italic">
-                    {v.data.explanation}
+                    {v.data?.explanation ?? ''}
                   </p>
                 </div>
               </div>

@@ -14,7 +14,6 @@ import {
     Loader2,
     RefreshCw
 } from 'lucide-react';
-import { FullAnalysisResponse } from '../types/advantage';
 
 interface HistoryItem {
     id: number;

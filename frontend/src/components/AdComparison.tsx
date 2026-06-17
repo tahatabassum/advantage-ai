@@ -21,7 +21,7 @@ const AdComparison: React.FC<AdComparisonProps> = ({ ads, onBack }) => {
     if (ads.length < 2) return null;
 
     const winnerIndex = ads.reduce((prevIdx, curr, currIdx) => 
-        curr.scoring.overall_score > ads[prevIdx].scoring.overall_score ? currIdx : prevIdx
+        (curr?.scoring?.overall_score ?? 0) > (ads[prevIdx]?.scoring?.overall_score ?? 0) ? currIdx : prevIdx
     , 0);
 
     return (
@@ -62,10 +62,10 @@ const AdComparison: React.FC<AdComparisonProps> = ({ ads, onBack }) => {
                             <div className="flex items-center justify-between">
                                 <div className="space-y-0.5">
                                     <p className="text-[10px] font-black uppercase text-slate-400">Variant {String.fromCharCode(65 + i)}</p>
-                                    <p className="text-xl font-black text-slate-900 capitalize">{ad.platform_rules.platform}</p>
+                                    <p className="text-xl font-black text-slate-900 capitalize">{ad?.platform_rules?.platform ?? 'Unknown'}</p>
                                 </div>
                                 <div className={`w-16 h-16 rounded-3xl flex items-center justify-center font-black text-2xl ${i === winnerIndex ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-400'}`}>
-                                    {ad.scoring.overall_score}%
+                                    {ad?.scoring?.overall_score ?? 0}%
                                 </div>
                             </div>
 
@@ -73,9 +73,9 @@ const AdComparison: React.FC<AdComparisonProps> = ({ ads, onBack }) => {
                                 <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Performance Metrics</h4>
                                 <div className="space-y-3">
                                     {[
-                                        { label: 'Visuals', val: ad.scoring.visual_quality_score },
-                                        { label: 'Copy', val: ad.scoring.copy_strength_score },
-                                        { label: 'Strategy', val: ad.scoring.psychology_score }
+                                        { label: 'Visuals', val: ad?.scoring?.visual_quality_score ?? 0 },
+                                        { label: 'Copy', val: ad?.scoring?.copy_strength_score ?? 0 },
+                                        { label: 'Strategy', val: ad?.scoring?.psychology_score ?? 0 }
                                     ].map(stat => (
                                         <div key={stat.label} className="space-y-1">
                                             <div className="flex justify-between text-[10px] font-black uppercase">
@@ -95,13 +95,13 @@ const AdComparison: React.FC<AdComparisonProps> = ({ ads, onBack }) => {
 
                             <div className="space-y-4 pt-6 border-t border-slate-100">
                                 <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Visual Hook</h4>
-                                <p className="text-sm font-bold text-slate-600 line-clamp-3">"{ad.hook_analysis.hook_text}"</p>
+                                <p className="text-sm font-bold text-slate-600 line-clamp-3">"{ad?.hook_analysis?.hook_text ?? 'N/A'}"</p>
                             </div>
 
                             <div className="space-y-3">
                                 <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Strategic Pros</h4>
                                 <div className="space-y-2">
-                                    {ad.feedback_checklist.low_priority.slice(0, 2).map((p, j) => (
+                                    {(ad?.feedback_checklist?.low_priority ?? []).slice(0, 2).map((p, j) => (
                                         <div key={j} className="flex items-start gap-2 text-xs font-bold text-emerald-600">
                                             <CheckCircle2 className="w-4 h-4 shrink-0" />
                                             <span>{p}</span>

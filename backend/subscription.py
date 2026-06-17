@@ -29,7 +29,7 @@ TIER_LIMITS = {
 def get_tier_limits(tier: str):
     return TIER_LIMITS.get(tier, TIER_LIMITS["free"])
 
-def check_usage_limit(user: models.User, db: Session):
+def check_usage_limit(user: models.User, db: Session, check_bulk: bool = False):
     limits = get_tier_limits(user.subscription_tier)
     
     # Check for reset date
@@ -38,13 +38,19 @@ def check_usage_limit(user: models.User, db: Session):
         reset_monthly_usage(user, db)
         db.refresh(user)
 
+    if check_bulk and not limits["bulk_allowed"]:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Bulk analysis is not available on the {user.subscription_tier} tier. Please upgrade to Pro."
+        )
+
     if limits["analyses_per_month"] == -1:
         return True
     
     if user.analyses_used_this_month >= limits["analyses_per_month"]:
         raise HTTPException(
             status_code=429,
-            detail=f"Monthly analysis limit reached for {user.subscription_tier} tier ({limits['analyses_per_month']} analyses). Upgrade to increase your limit."
+            detail=f"Monthly analysis limit reached for {user.subscription_tier} tier ({limits['analyses_per_month']} analyses). Upgrade to continue auditing."
         )
     
     return True

@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "concurrently \"python -m uvicorn backend.main:app --host 0.0.0.0 --port 8000\" \"vite\"",
+    "dev": "concurrently \"uvicorn backend.main:app --host 0.0.0.0 --port 8000\" \"vite\"",
     "build": "vite build",
     "start": "uvicorn backend.main:app --host 0.0.0.0 --port 3000",
     "preview": "vite preview",

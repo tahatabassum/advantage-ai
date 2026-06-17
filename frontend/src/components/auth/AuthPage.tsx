@@ -38,7 +38,9 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onSuccess }) => {
       }
     } catch (err: any) {
       const detail = err.response?.data?.detail;
-      if (err.response?.status === 401) {
+      console.error('Auth Error:', err.response);
+      
+      if (err.response?.status === 401 && mode === 'login') {
         setError('Incorrect email or password.');
       } else if (typeof detail === 'string') {
         setError(detail);

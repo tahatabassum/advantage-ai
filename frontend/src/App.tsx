@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { analyzeAd, analyzeBulk, checkHealth, rewriteAdText, getMe, resetUsers } from './services/api';
+import { analyzeAd, analyzeBulk, analyzeByUrl, checkHealth, rewriteAdText, getMe, resetUsers } from './services/api';
 import { FullAnalysisResponse } from './types/advantage';
 import { BrainCircuit, Loader2, Sparkles, RefreshCw, ChevronLeft, LogOut, User, Menu, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -20,6 +20,8 @@ import { AuthPage } from './components/auth/AuthPage';
 
 import HeroVisual from './components/HeroVisual';
 
+import UsageBanner from './UsageBanner';
+import PricingPage from './PricingPage';
 
 const loadingSteps = [
     "Scanning visual elements...",
@@ -33,7 +35,7 @@ const App: React.FC = () => {
     const [isAuthenticated, setIsAuthenticated] = useState<boolean>(!!localStorage.getItem('access_token'));
     const [user, setUser] = useState<any>(null);
     const [isCheckingAuth, setIsCheckingAuth] = useState<boolean>(true);
-    const [view, setView] = useState<'home' | 'video' | 'dashboard' | 'comparison' | 'brand'>('home');
+    const [view, setView] = useState<'home' | 'video' | 'dashboard' | 'comparison' | 'brand' | 'pricing'>('home');
     const [analysis, setAnalysis] = useState<FullAnalysisResponse | null>(null);
     const [lastCaption, setLastCaption] = useState<string>('');
     const [comparisonAds, setComparisonAds] = useState<FullAnalysisResponse[]>([]);
@@ -140,10 +142,39 @@ const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
                 return;
             }
             if (err.response?.status === 429) {
-                setError("Usage limit reached. Please wait a moment and try again.");
+                setError("Analysis limit reached. Please upgrade your plan to continue auditing.");
+                setView('pricing');
                 return;
             }
             setError(`Analysis failed: ${detail}. Please try again.`);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleAnalyzeByUrl = async (url: string, platform: string, objective: string) => {
+        setLoading(true);
+        setError(null);
+        setRewriteData(null);
+        try {
+            const result = await analyzeByUrl(url, 'generic', platform, objective);
+            setAnalysis(result);
+            setTimeout(() => {
+                resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 100);
+        } catch (err: any) {
+            console.error(err);
+            const detail = err.response?.data?.detail || err.message;
+            if (err.response?.status === 401) {
+                handleLogout();
+                return;
+            }
+            if (err.response?.status === 429) {
+                setError("Analysis limit reached. Please upgrade your plan to continue auditing.");
+                setView('pricing');
+                return;
+            }
+            setError(`URL Analysis failed: ${detail}. Please try again.`);
         } finally {
             setLoading(false);
         }
@@ -155,9 +186,9 @@ const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
         setRewriting(true);
         try {
             const allFeedback = [
-                ...analysis.feedback_checklist.high_priority,
-                ...analysis.feedback_checklist.medium_priority,
-                ...analysis.feedback_checklist.low_priority
+                ...(analysis?.feedback_checklist?.high_priority ?? []),
+                ...(analysis?.feedback_checklist?.medium_priority ?? []),
+                ...(analysis?.feedback_checklist?.low_priority ?? [])
             ];
             const result = await rewriteAdText(lastCaption, allFeedback);
             setRewriteData(result);
@@ -184,8 +215,8 @@ const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
     const handleAddToComparison = (ad: FullAnalysisResponse) => {
         setComparisonAds(prev => {
             const exists = prev.find(a => 
-                a.scoring.overall_score === ad.scoring.overall_score && 
-                a.hook_analysis.hook_text === ad.hook_analysis.hook_text
+                a?.scoring?.overall_score === ad?.scoring?.overall_score && 
+                a?.hook_analysis?.hook_text === ad?.hook_analysis?.hook_text
             );
             if (exists) return prev;
             return [...prev, ad];
@@ -256,6 +287,10 @@ const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
             className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${view === 'dashboard' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
             History
         </button>
+        <button onClick={() => { setView('pricing'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+            className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${view === 'pricing' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
+            Pricing
+        </button>
         {comparisonAds.length >= 2 && (
             <button onClick={() => { setView('comparison'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
                 className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${view === 'comparison' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
@@ -308,6 +343,7 @@ const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
                     { label: 'Video', viewKey: 'video' },
                     { label: 'Brand', viewKey: 'brand' },
                     { label: 'History', viewKey: 'dashboard' },
+                    { label: 'Pricing', viewKey: 'pricing' },
                     ...(comparisonAds.length >= 2 ? [{ label: `Compare (${comparisonAds.length})`, viewKey: 'comparison' }] : []),
                 ].map(({ label, viewKey }) => (
                     <button
@@ -339,7 +375,12 @@ const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
 </header>
 
-            <main className="flex-1 w-full max-w-7xl mx-auto p-4 md:p-8 space-y-12">
+            <main className={`flex-1 w-full max-w-7xl mx-auto p-4 md:p-8 ${view === 'home' ? 'pt-0 md:pt-0' : 'space-y-12'}`}>
+                {isAuthenticated && view !== 'pricing' && (
+                    <div className={view === 'home' ? 'mt-8' : ''}>
+                        <UsageBanner onUpgradeClick={() => setView('pricing')} />
+                    </div>
+                )}
                 {view === 'home' ? (
                     <>
                         {/* Hero Section */}
@@ -405,8 +446,8 @@ const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
                         </section>
         
                         {/* Upload Section */}
-                        <section id="upload" className="max-w-5xl mx-auto py-20">
-                            <UploadPanel onAnalyze={handleAnalyze} isLoading={loading} />
+                        <section id="upload" className="max-w-5xl mx-auto py-20 mt-12">
+                            <UploadPanel onAnalyze={handleAnalyze} onAnalyzeByUrl={handleAnalyzeByUrl} isLoading={loading} />
                         </section>
 
                         <AnimatePresence>
@@ -455,13 +496,13 @@ const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
                                     <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
                                         <div className="xl:col-span-2 space-y-12">
                                             <ScoreDashboard 
-                                                scoring={analysis.scoring}
-                                                visual={analysis.visual_analysis}
-                                                copy={analysis.copy_analysis}
-                                                psychology={analysis.psychology_triggers}
+                                                scoring={analysis?.scoring}
+                                                visual={analysis?.visual_analysis}
+                                                copy={analysis?.copy_analysis}
+                                                psychology={analysis?.psychology_triggers}
                                             />
                                             <FeedbackPanel 
-                                                feedback={analysis.feedback_checklist} 
+                                                feedback={analysis?.feedback_checklist} 
                                                 onRewriteRequested={handleRewrite}
                                                 isRewriting={rewriting}
                                             />
@@ -479,12 +520,38 @@ const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
                                                 )}
                                             </AnimatePresence>
 
-                                            <CopyVariants variants={analysis.copy_variants} />
-                                            <ABVariants variants={analysis.ab_variants} />
+                                            <CopyVariants variants={analysis?.copy_variants} />
+                                            <ABVariants variants={analysis?.ab_variants} />
                                         </div>
                                         
                                         <div className="space-y-8 sticky top-24 h-fit">
                                             <PDFDownload analysis={analysis} />
+
+                                            {/* Screenshot preview from URL analysis */}
+                                            {analysis?.screenshot_b64 && (
+                                                <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm">
+                                                    <div className="p-4 border-b border-slate-100 bg-slate-50/50">
+                                                        <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Ad Creative Preview</h3>
+                                                    </div>
+                                                    <img 
+                                                        src={`data:image/png;base64,${analysis.screenshot_b64}`}
+                                                        alt="Ad Creative Screenshot"
+                                                        className="w-full object-contain"
+                                                    />
+                                                    {analysis?.source_url && (
+                                                        <div className="p-3 border-t border-slate-100">
+                                                            <a 
+                                                                href={analysis.source_url} 
+                                                                target="_blank" 
+                                                                rel="noopener noreferrer"
+                                                                className="text-[10px] text-indigo-500 hover:text-indigo-700 font-bold break-all transition-colors"
+                                                            >
+                                                                {analysis.source_url.length > 50 ? analysis.source_url.slice(0, 50) + '...' : analysis.source_url}
+                                                            </a>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
                                             
                                             <div className="bg-white rounded-3xl border border-slate-200 p-8 space-y-6 shadow-sm">
                                                 <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Audience Mismatch</h3>
@@ -493,14 +560,14 @@ const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
                                                         <div className="w-10 h-10 bg-slate-50 flex items-center justify-center rounded-xl font-black text-slate-400">18</div>
                                                         <div className="space-y-0.5">
                                                             <p className="text-[10px] font-black uppercase text-slate-400 leading-none">Inferred Age</p>
-                                                            <p className="text-sm font-black leading-none">{analysis.audience.inferred_age_range}</p>
+                                                            <p className="text-sm font-black leading-none">{analysis?.audience?.inferred_age_range ?? 'N/A'}</p>
                                                         </div>
                                                     </div>
                                                     <div className="flex items-center gap-3">
                                                         <div className="w-10 h-10 bg-slate-50 flex items-center justify-center rounded-xl font-black text-slate-400">$</div>
                                                         <div className="space-y-0.5">
                                                             <p className="text-[10px] font-black uppercase text-slate-400 leading-none">Income Bracket</p>
-                                                            <p className="text-sm font-black leading-none">{analysis.audience.income_bracket}</p>
+                                                            <p className="text-sm font-black leading-none">{analysis?.audience?.income_bracket ?? 'N/A'}</p>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -508,7 +575,7 @@ const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
                                                 <div className="pt-4 border-t border-slate-100">
                                                     <p className="text-[10px] font-black uppercase text-slate-400 mb-3">Mismatch Warnings</p>
                                                     <div className="space-y-2">
-                                                        {analysis.audience.mismatch_warnings.map((w, i) => (
+                                                        {(analysis?.audience?.mismatch_warnings ?? []).map((w, i) => (
                                                             <div key={i} className="text-xs font-bold text-rose-600 bg-rose-50 p-3 rounded-xl border border-rose-100">
                                                                 {w}
                                                             </div>
@@ -520,7 +587,7 @@ const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
                                             <div className="bg-slate-900 rounded-3xl p-8 text-white shadow-xl shadow-slate-900/10">
                                                 <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-6">Platform Heatmap</h3>
                                                 <div className="space-y-4">
-                                                    {Object.entries(analysis.platform_fit_scores).map(([k, v]) => (
+                                                    {Object.entries(analysis?.platform_fit_scores ?? {}).map(([k, v]) => (
                                                         <div key={k} className="space-y-1.5">
                                                             <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-slate-500">
                                                                 <span>{k.replace('_', ' ')}</span>
@@ -575,6 +642,10 @@ const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
                              <p className="text-slate-500 font-semibold">Define your unique market position and creative boundaries.</p>
                         </div>
                         <BrandCenter />
+                    </section>
+                ) : view === 'pricing' ? (
+                    <section className="py-12">
+                        <PricingPage currentTier={user?.subscription_tier} />
                     </section>
                 ) : (
                     <section className="py-12">

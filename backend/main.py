@@ -5,6 +5,14 @@ from datetime import datetime, timedelta
 # Add backend to path for local imports
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
+# Fix Windows console encoding issues (prevents UnicodeEncodeError on print)
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+    except:
+        pass
+
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Response, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -28,10 +36,12 @@ load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.abspath(__file__)),
 
 from analyzer import analyze_ad, rewrite_ad_text, UnauthenticatedError, QuotaExceededError
 from video_analyzer import analyze_video_ad
+from url_analyzer import analyze_url_ad
 from schemas import (
     FullAnalysisResponse, BrandProfileSchema, BrandProfileResponse, 
     RewriteRequest, RewriteResponse, UserCreate, Token, UserResponse,
-    SubscriptionStatus, PasswordResetRequest, PasswordReset, EmailVerification
+    SubscriptionStatus, PasswordResetRequest, PasswordReset, EmailVerification,
+    UrlAnalysisRequest
 )
 from auth_utils import get_password_hash, verify_password, create_access_token, get_current_user
 from pdf_generator import generate_pdf
@@ -49,8 +59,20 @@ limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    print(f"[ValidationError] Details: {exc.errors()}")
+    return JSONResponse(
+        status_code=422,
+        content={"detail": exc.errors(), "body": str(exc.body)},
+    )
+
 ADMIN_SECRET = os.getenv("ADMIN_SECRET")
-ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "https://ais-pre-mafm43q6zvfx4ge5sunea3-741194872062.asia-east1.run.app")
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173")
+ADMIN_EMAILS = os.getenv("ADMIN_EMAILS", "").split(",")
 
 # Configure CORS
 origins = ALLOWED_ORIGINS.split(",")
@@ -61,6 +83,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# --- Admin Dependency ---
+def check_admin(current_user: models.User = Depends(get_current_user)):
+    if current_user.email not in ADMIN_EMAILS:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return current_user
 
 # --- Authentication Endpoints ---
 
@@ -185,15 +213,33 @@ async def health_check():
         "ai_available": bool(api_key)
     }
 
+@app.get("/api/v1/advantage/subscription/status", response_model=SubscriptionStatus)
+async def get_subscription_status(current_user: models.User = Depends(get_current_user), db: Session = Depends(database.get_db)):
+    # Check for usage reset before returning status
+    check_usage_limit(current_user, db)
+    
+    limits = get_tier_limits(current_user.subscription_tier)
+    analyses_per_month = limits["analyses_per_month"]
+    
+    remaining = -1
+    if analyses_per_month != -1:
+        remaining = max(0, analyses_per_month - current_user.analyses_used_this_month)
+    
+    return {
+        "current_tier": current_user.subscription_tier,
+        "analyses_used": current_user.analyses_used_this_month,
+        "analyses_remaining": remaining,
+        "reset_date": current_user.subscription_reset_date
+    }
 
 @app.post("/api/v1/advantage/analyze", response_model=FullAnalysisResponse)
 @limiter.limit("10/minute")
 async def analyze(
     request: Request,
     image: UploadFile = File(...),
-    caption: str = Form(...),
-    platform: str = Form(...),
-    objective: str = Form(...),
+    caption: str = Form(""),
+    platform: str = Form("Meta"),
+    objective: str = Form("Conversion"),
     db: Session = Depends(database.get_db),
     current_user: models.User = Depends(get_current_user)
 ):
@@ -304,27 +350,112 @@ async def analyze_video(
             objective,
             brand_profile
         )
+
+        # Validate that analysis is a proper dict with scoring
+        if not isinstance(analysis, dict):
+            raise HTTPException(status_code=500, detail="Video analysis returned invalid data.")
+
+        # If success is explicitly False but has scoring (full template), return it
+        # but don't save to history
+        if analysis.get("success") is False:
+            return analysis
+
+        # Save to history — only if analysis has valid scoring
+        scoring = analysis.get("scoring", {})
+        db_history = models.AnalysisHistory(
+            user_id=current_user.id,
+            platform=platform,
+            overall_score=scoring.get("overall_score", 0),
+            grade=scoring.get("grade", "F"),
+            full_json=json.dumps(analysis)
+        )
+        db.add(db_history)
+        increment_usage(current_user, db)
+        db.commit()
+        db.refresh(db_history)
+
+        return analysis
+
     except UnauthenticatedError as e:
         raise HTTPException(status_code=401, detail=str(e))
     except QuotaExceededError as e:
         raise HTTPException(status_code=429, detail=str(e))
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        print(f"Video analysis error: {e}")
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Video analysis failed: {str(e)}")
 
-    # Save to history
-    db_history = models.AnalysisHistory(
-        user_id=current_user.id,
-        platform=platform,
-        overall_score=analysis["scoring"]["overall_score"],
-        grade=analysis["scoring"]["grade"],
-        full_json=json.dumps(analysis)
-    )
-    db.add(db_history)
-    increment_usage(current_user, db)
-    db.commit()
-    db.refresh(db_history)
+@app.post("/api/v1/advantage/analyze-url")
+@limiter.limit("5/minute")
+async def analyze_url(
+    request: Request,
+    data: UrlAnalysisRequest,
+    db: Session = Depends(database.get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    try:
+        # Check Usage Limits
+        check_usage_limit(current_user, db)
+        
+        # Fetch brand profile
+        brand_profile = db.query(models.BrandProfile).filter(models.BrandProfile.user_id == current_user.id).first()
+        brand_data = {
+            "brand_name": brand_profile.brand_name,
+            "industry": brand_profile.industry,
+            "target_audience": brand_profile.target_audience,
+            "brand_voice": brand_profile.brand_voice,
+            "main_competitors": brand_profile.main_competitors
+        } if brand_profile else None
 
-    return analysis
+        analysis = await analyze_url_ad(
+            data.url, 
+            data.analysis_type, 
+            data.platform, 
+            data.objective, 
+            brand_data
+        )
+
+        # Validate analysis is a proper dict
+        if not isinstance(analysis, dict):
+            raise HTTPException(status_code=500, detail="URL analysis returned invalid data.")
+
+        # If success is explicitly False, return the analysis as-is (it has full template)
+        # but don't save to history
+        if analysis.get("success") is False:
+            return analysis
+        
+        # Save to history — safely access scoring
+        scoring = analysis.get("scoring", {})
+        db_history = models.AnalysisHistory(
+            user_id=current_user.id,
+            platform=data.platform,
+            overall_score=scoring.get("overall_score", 0),
+            grade=scoring.get("grade", "F"),
+            full_json=json.dumps(analysis)
+        )
+        db.add(db_history)
+        
+        # Increment usage
+        increment_usage(current_user, db)
+        
+        db.commit()
+        db.refresh(db_history)
+        
+        return analysis
+    except UnauthenticatedError as e:
+        raise HTTPException(status_code=401, detail=str(e))
+    except QuotaExceededError as e:
+        raise HTTPException(status_code=429, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        print(f"URL Analysis error: {e}")
+        print(traceback.format_exc())
+        raise HTTPException(status_code=400, detail=f"URL Analysis failed: {str(e)}")
 
 @app.post("/api/v1/advantage/analyze/rewrite", response_model=RewriteResponse)
 async def rewrite(
@@ -440,7 +571,7 @@ async def analyze_bulk(
     current_user: models.User = Depends(get_current_user)
 ):
     try:
-        # Check Usage Limits at start
+        # Check Usage Limits at start - also check bulk permission
         check_usage_limit(current_user, db)
         
         caption_list = json.loads(captions)
@@ -510,7 +641,87 @@ async def export_comparison_pdf(analyses: List[Dict]):
         print(f"Comparison PDF error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# --- Admin Endpoints ---
 
+@app.get("/api/v1/advantage/admin/stats")
+async def get_admin_stats(current_user: models.User = Depends(check_admin), db: Session = Depends(database.get_db)):
+    total_users = db.query(func.count(models.User.id)).scalar()
+    total_analyses = db.query(func.count(models.AnalysisHistory.id)).scalar()
+    
+    users_by_tier = db.query(models.User.subscription_tier, func.count(models.User.id))\
+        .group_by(models.User.subscription_tier).all()
+    
+    last_7_days = datetime.utcnow() - timedelta(days=7)
+    analyses_7d = db.query(func.count(models.AnalysisHistory.id))\
+        .filter(models.AnalysisHistory.created_at >= last_7_days).scalar()
+        
+    last_30_days = datetime.utcnow() - timedelta(days=30)
+    analyses_30d = db.query(func.count(models.AnalysisHistory.id))\
+        .filter(models.AnalysisHistory.created_at >= last_30_days).scalar()
+        
+    top_platforms = db.query(models.AnalysisHistory.platform, func.count(models.AnalysisHistory.id))\
+        .group_by(models.AnalysisHistory.platform)\
+        .order_by(func.count(models.AnalysisHistory.id).desc())\
+        .limit(5).all()
+
+    return {
+        "total_users": total_users,
+        "total_analyses": total_analyses,
+        "users_by_tier": dict(users_by_tier),
+        "analyses_last_7_days": analyses_7d,
+        "analyses_last_30_days": analyses_30d,
+        "top_platforms": dict(top_platforms)
+    }
+
+@app.get("/api/v1/advantage/admin/users")
+async def get_admin_users(
+    page: int = 1, 
+    limit: int = 20, 
+    search: Optional[str] = None,
+    current_user: models.User = Depends(check_admin), 
+    db: Session = Depends(database.get_db)
+):
+    query = db.query(models.User)
+    if search:
+        query = query.filter(models.User.email.ilike(f"%{search}%"))
+    
+    total = query.count()
+    users = query.offset((page - 1) * limit).limit(limit).all()
+    
+    return {
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "users": [
+            {
+                "id": u.id,
+                "email": u.email,
+                "tier": u.subscription_tier,
+                "created_at": u.created_at,
+                "is_verified": u.is_verified,
+                "analyses_count": db.query(func.count(models.AnalysisHistory.id)).filter(models.AnalysisHistory.user_id == u.id).scalar()
+            } for u in users
+        ]
+    }
+
+@app.post("/api/v1/advantage/admin/users/{user_id}/change-tier")
+async def admin_change_tier(
+    user_id: int, 
+    tier_data: Dict, 
+    current_user: models.User = Depends(check_admin), 
+    db: Session = Depends(database.get_db)
+):
+    new_tier = tier_data.get("tier")
+    if new_tier not in ["free", "pro", "agency"]:
+        raise HTTPException(status_code=400, detail="Invalid tier")
+        
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    user.subscription_tier = new_tier
+    db.commit()
+    return {"status": "ok", "message": f"User tier changed to {new_tier}"}
 
 @app.post("/api/v1/advantage/debug/reset-users")
 async def reset_users(
